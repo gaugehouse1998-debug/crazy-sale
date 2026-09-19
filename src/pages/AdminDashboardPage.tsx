@@ -25,11 +25,20 @@ export const AdminDashboardPage: React.FC = () => {
   const { 
     settings, updateSettings, products, categories, 
     paymentAccounts, addToast, refreshProducts, 
-    refreshPaymentAccounts 
+    refreshPaymentAccounts, refreshCategories 
   } = useStore();
   const { navigate } = useRouter();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'banks' | 'settings'>('orders');
+
+  // Delete Confirmation Modal State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    type: 'product' | 'bank' | 'order' | 'category';
+    id: string;
+    title: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Admin Login Form State (when !isAdmin)
   const [adminEmail, setAdminEmail] = useState('crazysale2026@gmail.com');
@@ -354,13 +363,57 @@ export const AdminDashboardPage: React.FC = () => {
     addToast('success', 'Product Saved', `${prodToSave.title} updated in inventory.`);
   };
 
-  // Delete Product
-  const handleDeleteProduct = async (id: string, title: string) => {
-    if (confirm(`Are you sure you want to delete "${title}"?`)) {
-      await storeService.deleteProduct(id);
-      await refreshProducts();
-      addToast('info', 'Deleted', `Product removed.`);
+  // Execute confirmed deletion across all entities
+  const handleExecuteDelete = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    const { type, id, title } = deleteConfirm;
+    try {
+      if (type === 'product') {
+        await storeService.deleteProduct(id);
+        await refreshProducts();
+        if (editingProduct?.id === id) setEditingProduct(null);
+        addToast('info', 'Product Removed', `"${title}" has been permanently deleted.`);
+      } else if (type === 'bank') {
+        await storeService.deletePaymentAccount(id);
+        await refreshPaymentAccounts();
+        if (editingBank?.id === id) setEditingBank(null);
+        addToast('info', 'Bank Account Removed', `${title} has been deleted.`);
+      } else if (type === 'order') {
+        await storeService.deleteOrder(id);
+        await loadOrders();
+        if (selectedOrder?.id === id) setSelectedOrder(null);
+        addToast('info', 'Order Removed', `Order #${title} has been deleted.`);
+      } else if (type === 'category') {
+        await storeService.deleteCategory(id);
+        await refreshCategories();
+        if (editingCategory?.id === id) setEditingCategory(null);
+        addToast('info', 'Category Removed', `Category "${title}" has been deleted.`);
+      }
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      addToast('error', 'Delete Failed', err?.message || 'Failed to complete deletion.');
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
     }
+  };
+
+  // Delete Handlers
+  const handleDeleteProduct = (id: string, title: string) => {
+    setDeleteConfirm({ isOpen: true, type: 'product', id, title });
+  };
+
+  const handleDeleteBank = (id: string, bankName: string) => {
+    setDeleteConfirm({ isOpen: true, type: 'bank', id, title: bankName });
+  };
+
+  const handleDeleteOrder = (id: string, orderNumber: string) => {
+    setDeleteConfirm({ isOpen: true, type: 'order', id, title: orderNumber });
+  };
+
+  const handleDeleteCategory = (id: string, catName: string) => {
+    setDeleteConfirm({ isOpen: true, type: 'category', id, title: catName });
   };
 
   // Handle Product Image Upload via Firebase Storage
@@ -422,18 +475,6 @@ export const AdminDashboardPage: React.FC = () => {
       addToast('error', 'Save Failed', err?.message || 'Could not save payment account.');
     } finally {
       setSavingBank(false);
-    }
-  };
-
-  const handleDeleteBank = async (id: string, bankName: string) => {
-    if (confirm(`Are you sure you want to delete bank account "${bankName}"?`)) {
-      try {
-        await storeService.deletePaymentAccount(id);
-        await refreshPaymentAccounts();
-        addToast('info', 'Bank Account Removed', `${bankName} has been deleted.`);
-      } catch (err: any) {
-        addToast('error', 'Delete Failed', err?.message || 'Failed to delete bank account.');
-      }
     }
   };
 
@@ -692,17 +733,28 @@ export const AdminDashboardPage: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => {
-                              setSelectedOrder(ord);
-                              setTrackingNumberInput(ord.trackingNumber || '');
-                              setCarrierInput(ord.carrier || '');
-                              setRejectionReasonInput('');
-                            }}
-                            className="px-3 py-1.5 bg-stone-900 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
-                          >
-                            Inspect & Action
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedOrder(ord);
+                                setTrackingNumberInput(ord.trackingNumber || '');
+                                setCarrierInput(ord.carrier || '');
+                                setRejectionReasonInput('');
+                              }}
+                              className="px-3 py-1.5 bg-stone-900 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                            >
+                              Inspect & Action
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOrder(ord.id, ord.orderNumber)}
+                              className="p-1.5 text-rose-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                              title="Delete Order"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -875,6 +927,24 @@ export const AdminDashboardPage: React.FC = () => {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteOrder(selectedOrder.id, selectedOrder.orderNumber)}
+                    className="px-3.5 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Order
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedOrder(null)}
+                    className="px-5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    Close
+                  </button>
                 </div>
               </div>
             </div>
@@ -1197,20 +1267,32 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
-                  <button
-                    type="button"
-                    onClick={() => setEditingProduct(null)}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-xs font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-amber-700"
-                  >
-                    Save Product
-                  </button>
+                <div className="flex items-center justify-between gap-3 pt-4 border-t border-stone-100">
+                  {!isNewProduct && editingProduct ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm({ isOpen: true, type: 'product', id: editingProduct.id, title: editingProduct.title })}
+                      className="px-4 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Product
+                    </button>
+                  ) : <div />}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingProduct(null)}
+                      className="px-4 py-2 border border-stone-200 rounded-xl text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors"
+                    >
+                      Save Product
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -1247,7 +1329,17 @@ export const AdminDashboardPage: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-stone-100 text-[11px]">
                   <span className="text-emerald-700 font-semibold">Active</span>
-                  <span className="text-stone-400">Order: {cat.displayOrder}</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                      className="p-1 text-rose-400 hover:text-rose-600 rounded-md hover:bg-rose-50 transition-colors"
+                      title={`Delete Category "${cat.name}"`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-stone-400 ml-1">Order: {cat.displayOrder}</span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1523,21 +1615,33 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-3 pt-4 border-t border-stone-100">
-                  <button
-                    type="button"
-                    onClick={() => setEditingBank(null)}
-                    className="px-4 py-2 border border-stone-200 rounded-xl text-xs font-semibold"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingBank}
-                    className="px-6 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors disabled:opacity-50"
-                  >
-                    {savingBank ? 'Saving...' : 'Save Payment Account'}
-                  </button>
+                <div className="flex items-center justify-between gap-3 pt-4 border-t border-stone-100">
+                  {!isNewBank && editingBank ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm({ isOpen: true, type: 'bank', id: editingBank.id, title: editingBank.bankName })}
+                      className="px-4 py-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Account
+                    </button>
+                  ) : <div />}
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setEditingBank(null)}
+                      className="px-4 py-2 border border-stone-200 rounded-xl text-xs font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingBank}
+                      className="px-6 py-2 bg-stone-900 text-white rounded-xl text-xs font-bold hover:bg-amber-700 transition-colors disabled:opacity-50"
+                    >
+                      {savingBank ? 'Saving...' : 'Save Payment Account'}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -1790,6 +1894,43 @@ export const AdminDashboardPage: React.FC = () => {
               </form>
             </div>
           )}
+        </div>
+      )}
+
+      {/* GLOBAL ADMIN DELETE CONFIRMATION MODAL */}
+      {deleteConfirm && deleteConfirm.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl text-center border border-stone-100 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-stone-900 text-base">Confirm Deletion</h4>
+              <p className="text-xs text-stone-600 mt-1.5 leading-relaxed">
+                Are you sure you want to permanently delete{' '}
+                <span className="font-semibold text-stone-900">"{deleteConfirm.title}"</span>?
+                This action is immediate and persistent across the store.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-stone-200 hover:bg-stone-50 text-stone-700 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                disabled={isDeleting}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-colors shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

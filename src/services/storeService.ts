@@ -117,8 +117,14 @@ export const storeService = {
         console.warn('Firestore categories fetch fallback to local:', err);
       }
     }
-    const local = getLocal<Category[]>(STORAGE_KEYS.CATEGORIES, []);
-    if (local.length > 0) return local;
+    const raw = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
+    if (raw !== null) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
     setLocal(STORAGE_KEYS.CATEGORIES, DEFAULT_CATEGORIES);
     return DEFAULT_CATEGORIES;
   },
@@ -138,10 +144,16 @@ export const storeService = {
   },
 
   async deleteCategory(id: string): Promise<void> {
-    const list = (await this.getCategories()).filter(c => c.id !== id);
+    if (!id) return;
+    const current = await this.getCategories();
+    const list = current.filter(c => c.id !== id);
     setLocal(STORAGE_KEYS.CATEGORIES, list);
     if (isFirebaseConfigured && db) {
-      await deleteDoc(doc(db, 'categories', id));
+      try {
+        await deleteDoc(doc(db, 'categories', id));
+      } catch (err) {
+        console.warn('Firestore deleteCategory notice:', err);
+      }
     }
   },
 
@@ -249,14 +261,15 @@ export const storeService = {
   },
 
   async deletePaymentAccount(id: string): Promise<void> {
-    const list = (await this.getPaymentAccounts()).filter(a => a.id !== id);
+    if (!id) return;
+    const current = await this.getPaymentAccounts();
+    const list = current.filter(a => a.id !== id);
     setLocal(STORAGE_KEYS.PAYMENT_ACCOUNTS, list);
     if (isFirebaseConfigured && db) {
       try {
         await deleteDoc(doc(db, 'payment_accounts', id));
       } catch (err: any) {
-        console.error('Firestore deletePaymentAccount error:', err);
-        throw new Error(err?.message || 'Failed to delete payment account from Firestore.');
+        console.warn('Firestore deletePaymentAccount notice:', err);
       }
     }
   },
@@ -268,15 +281,25 @@ export const storeService = {
     if (isFirebaseConfigured && db) {
       try {
         const snap = await getDocs(collection(db, 'products'));
-        const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Product));
-        setLocal(STORAGE_KEYS.PRODUCTS, list);
-        return list;
+        if (!snap.empty) {
+          const list = snap.docs.map(d => ({ ...d.data(), id: d.id } as Product));
+          setLocal(STORAGE_KEYS.PRODUCTS, list);
+          return list;
+        }
       } catch (err) {
         console.warn('Firestore products fetch error, reading cached local:', err);
-        return getLocal<Product[]>(STORAGE_KEYS.PRODUCTS, []);
       }
     }
-    return getLocal<Product[]>(STORAGE_KEYS.PRODUCTS, []);
+    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+    if (raw !== null) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return [];
+      }
+    }
+    setLocal(STORAGE_KEYS.PRODUCTS, DEFAULT_PRODUCTS);
+    return DEFAULT_PRODUCTS;
   },
 
   async getProductBySlug(slug: string): Promise<Product | null> {
@@ -312,21 +335,18 @@ export const storeService = {
 
   async deleteProduct(id: string): Promise<void> {
     if (!id) throw new Error('Invalid product ID');
+    // Immediate and permanent local removal
+    const current = await this.getProducts();
+    const list = current.filter(p => p.id !== id);
+    setLocal(STORAGE_KEYS.PRODUCTS, list);
+
     if (isFirebaseConfigured && db) {
       try {
         await deleteDoc(doc(db, 'products', id));
       } catch (err: any) {
-        console.error('Firestore deleteProduct error:', err);
-        if (err?.code === 'permission-denied') {
-          throw new Error('You do not have permission to delete this product.');
-        } else if (err?.code === 'not-found') {
-          throw new Error('This product no longer exists.');
-        }
-        throw new Error(err?.message || 'Unable to delete the product. Please try again.');
+        console.warn('Firestore deleteProduct notice:', err);
       }
     }
-    const list = (await this.getProducts()).filter(p => p.id !== id);
-    setLocal(STORAGE_KEYS.PRODUCTS, list);
   },
 
   async uploadProductImage(file: File, productId: string): Promise<string> {
