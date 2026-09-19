@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Crockery, kitchenware, tableware and home decoration item in the catalog",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "slug": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 100 },
+        "brand": { "type": "string", "maxLength": 100 },
+        "sku": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "regularPrice": { "type": "number" },
+        "salePrice": { "type": "number" },
+        "stockQuantity": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 30 },
+        "weightKg": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "isSample": { "type": "boolean" }
+      },
+      "required": ["title", "slug", "category", "regularPrice", "stockQuantity"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product collection category",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "slug": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "image": { "type": "string", "maxLength": 1000 },
+        "displayOrder": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["name", "slug", "isActive"]
+    },
+    "Banner": {
+      "title": "Banner",
+      "description": "Homepage hero carousel promotional banner",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 150 },
+        "subtitle": { "type": "string", "maxLength": 250 },
+        "ctaText": { "type": "string", "maxLength": 50 },
+        "destination": { "type": "string", "maxLength": 200 },
+        "imageUrl": { "type": "string", "maxLength": 1000 },
+        "displayOrder": { "type": "number" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["title", "imageUrl", "isActive"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order with advance payment verification and delivery",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "customerUid": { "type": "string", "maxLength": 128 },
+        "subtotal": { "type": "number" },
+        "shipping": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "paymentStatus": { "type": "string", "maxLength": 50 },
+        "verificationStatus": { "type": "string", "maxLength": 50 },
+        "transactionId": { "type": "string", "maxLength": 100 },
+        "paidAmount": { "type": "number" }
+      },
+      "required": ["orderNumber", "customerUid", "subtotal", "total", "paymentStatus"]
+    },
+    "PaymentAccount": {
+      "title": "PaymentAccount",
+      "description": "Official company bank accounts for advance payment transfer",
+      "type": "object",
+      "properties": {
+        "bankName": { "type": "string", "maxLength": 100 },
+        "accountTitle": { "type": "string", "maxLength": 100 },
+        "accountNumber": { "type": "string", "maxLength": 60 },
+        "iban": { "type": "string", "maxLength": 60 },
+        "branchName": { "type": "string", "maxLength": 100 },
+        "branchCode": { "type": "string", "maxLength": 30 },
+        "instructions": { "type": "string", "maxLength": 1000 },
+        "isActive": { "type": "boolean" },
+        "isDefault": { "type": "boolean" }
+      },
+      "required": ["bankName", "accountTitle", "accountNumber", "isActive"]
+    },
+    "StoreSettings": {
+      "title": "StoreSettings",
+      "description": "Global store configuration and contact details",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string", "maxLength": 100 },
+        "tagline": { "type": "string", "maxLength": 200 },
+        "whatsapp": { "type": "string", "maxLength": 30 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 100 },
+        "address": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["storeName"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Public catalog products"
+    },
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Product categories"
+    },
+    "/banners/{bannerId}": {
+      "schema": "Banner",
+      "description": "Hero banners"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders"
+    },
+    "/payment_accounts/{accountId}": {
+      "schema": "PaymentAccount",
+      "description": "Active bank accounts for payment"
+    },
+    "/store_settings/{settingId}": {
+      "schema": "StoreSettings",
+      "description": "Store settings"
+    }
+  }
+}

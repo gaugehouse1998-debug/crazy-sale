@@ -1,0 +1,46 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'crazysale2026@gmail.com' ||
+          request.auth.token.email.matches('(?i).*admin.*')
+        )
+      );
+    }
+
+    // Public view for product, category and banner images
+    match /products/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /categories/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /banners/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Payment proofs: Customers can upload screenshots under their uid or orderId
+    match /payment_proofs/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() 
+        && request.resource.size < 15 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+  }
+}

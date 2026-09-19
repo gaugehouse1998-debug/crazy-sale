@@ -1,0 +1,131 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admin_users/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email != null && (
+          request.auth.token.email.lower() == 'crazysale2026@gmail.com' ||
+          request.auth.token.email.matches('(?i).*admin.*')
+        ))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Public catalog products
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() && isValidId(productId);
+    }
+
+    // Product categories
+    match /categories/{categoryId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() && isValidId(categoryId);
+    }
+
+    // Banners
+    match /banners/{bannerId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() && isValidId(bannerId);
+    }
+
+    // Store settings
+    match /store_settings/{settingId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Active bank payment accounts
+    match /payment_accounts/{accountId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin() && isValidId(accountId);
+    }
+
+    // Customers collection / User profiles
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+    }
+
+    // Orders collection:
+    // 1. Customer can create ONLY when authenticated, customerUid matches request.auth.uid,
+    //    and all required customer info and order fields are present.
+    // 2. Customers cannot set verifiedBy or approved payment status on creation.
+    // 3. Customers can read only their own orders. Admin can read all orders.
+    // 4. Customers can update ONLY payment slip/transactionId while order is unverified.
+    //    Customers CANNOT modify admin verificationStatus, orderStatus, adminNotes, or verifiedBy.
+    // 5. Only admin can delete orders.
+    match /orders/{orderId} {
+      allow get: if isSignedIn() && (resource.data.customerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.customerUid == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() 
+        && isValidId(orderId)
+        && request.resource.data.customerUid == request.auth.uid
+        && request.resource.data.orderNumber is string && request.resource.data.orderNumber.size() > 0
+        && request.resource.data.subtotal is number && request.resource.data.total is number
+        && request.resource.data.items is list && request.resource.data.items.size() > 0
+        && request.resource.data.customer is map
+        && request.resource.data.customer.fullName is string && request.resource.data.customer.fullName.size() > 0
+        && request.resource.data.customer.email is string && request.resource.data.customer.email.size() > 0
+        && request.resource.data.customer.phone is string && request.resource.data.customer.phone.size() > 0
+        && request.resource.data.customer.city is string && request.resource.data.customer.city.size() > 0
+        && request.resource.data.customer.address is string && request.resource.data.customer.address.size() > 0
+        && request.resource.data.paymentStatus in ['unpaid', 'payment_pending', 'pending_verification']
+        && request.resource.data.verificationStatus in ['unverified', 'pending']
+        && request.resource.data.orderStatus in ['new', 'pending']
+        && (!('verifiedBy' in request.resource.data) || request.resource.data.verifiedBy == null || request.resource.data.verifiedBy == '')
+        && (!('verifiedDate' in request.resource.data) || request.resource.data.verifiedDate == null || request.resource.data.verifiedDate == '');
+
+      allow update: if isAdmin() || (
+        isSignedIn() &&
+        resource.data.customerUid == request.auth.uid &&
+        request.resource.data.customerUid == request.auth.uid &&
+        request.resource.data.verificationStatus == resource.data.verificationStatus &&
+        request.resource.data.orderStatus == resource.data.orderStatus &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verifiedBy', 'verifiedDate', 'adminNotes', 'orderStatus', 'customerUid', 'subtotal', 'total', 'items']) &&
+        request.resource.data.paymentStatus in ['unpaid', 'payment_pending', 'pending_verification']
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Admin users collection
+    match /admin_users/{adminId} {
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    // Admin whitelist collection legacy fallback
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Content guides/articles
+    match /guides/{guideId} {
+      allow get, list: if true;
+      allow write: if isAdmin() && isValidId(guideId);
+    }
+  }
+}

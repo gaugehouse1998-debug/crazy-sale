@@ -1,0 +1,6 @@
+{
+  "name": "Crazy Sale - Crockery & Home Decoration",
+  "description": "Production-ready ecommerce store for luxury crockery, kitchenware, tableware, and home decoration in Pakistan with advance bank payment verification, weight-based delivery, and order tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
